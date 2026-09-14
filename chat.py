@@ -1,37 +1,53 @@
+import json
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError, APIConnectionError
 
-# B: load the API key from .env
+# load the API key from .env
 load_dotenv()
 api_key = os.getenv("DEEPSEEK_API_KEY")
 print("Key loaded:", api_key is not None)
 
-# D: Connect to DeepSeek using the key
-client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+# Connect to DeepSeek using the key
+client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=30)
 
-# Conversation memory: the whole chat, sent everytime.
-history = []
+# Conversation memory: the whole chat, sent every time.
+if os.path.exists("history.json"):
+    with open("history.json", "r") as f:
+        history = json.load(f)
+else:
+    history = []
 
 print("Type 'quit' to exit.")
 while True: 
-    # C: Type a message
+    # Type a message
     message = input("You: ")
     if message == "quit":
         break
     history.append({"role": "user", "content": message})
 
-    # E: Send the message to DeepSeek
-    response = client.chat.completions.create(
-        model="deepseek-flash",
-        messages=history,
-    )
+    # Handle network failures instead of crashing
+    try:
+        # Send the message to DeepSeek
+        response = client.chat.completions.create(
+            model="deepseek-flash",
+            messages=history,
+        )
 
-    # F: Pull the reply text out of DeepSeek's response
-    reply = response.choices[0].message.content
-    model = response.model
+        # Pull the reply text out of DeepSeek's response
+        reply = response.choices[0].message.content
+        model = response.model
+
+
+        # Print the reply
+        print("DeepSeek:", reply)
+        print("Model:", model)
+
+    except (APIConnectionError, APITimeoutError):
+        history.pop()
+        print("Couldn't reach DeepSeek. Try again in a moment.")
+        continue
+
     history.append({"role": "assistant", "content": reply})
-
-    # A: Print the reply
-    print("DeepSeek:", reply)
-    print("Model:", model)
+    with open("history.json", "w") as f:
+        json.dump(history, f, indent=2, ensure_ascii=False) # indent + ensure_ascii keep the file human-readable, including Chinese
