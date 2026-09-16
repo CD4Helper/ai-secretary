@@ -1,3 +1,5 @@
 .env
 .venv/
 ai-secretary-decisions.md
+history.json
+memory.md
