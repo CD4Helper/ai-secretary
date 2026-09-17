@@ -1,22 +1,78 @@
+import json
 import os
 from dotenv import load_dotenv
 from telebot import TeleBot
+from openai import OpenAI, APITimeoutError, APIConnectionError
 
-# load the Telegram Bot Token from .env
+# Load API key, bot token, and Telegram ID from .env
 load_dotenv()
+
+api_key = os.getenv("DEEPSEEK_API_KEY")
+print("API Key loaded:", api_key is not None)
+
 bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-my_id = int(os.getenv("MY_TELEGRAM_ID")) # Telegram ID is number so int() is important
-print("Key loaded:", bot_token is not None)
+print("Bot Token loaded:", bot_token is not None)
+
+# .env values are text; Telegram IDs are numbers
+my_id = int(os.getenv("MY_TELEGRAM_ID"))
+
+# Connect to DeepSeek using the key
+client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=30)
+
+# Connect to Telegram using the token
 bot = TeleBot(bot_token)
 
-# The body part of the bot
-@bot.message_handler(commands=['start', 'help'], func=lambda message: message.from_user.id == my_id)
+# Facts about me, sent as the system message
+if os.path.exists("memory.md"):
+    with open("memory.md", "r", encoding="utf-8") as f:
+        memory = f.read()
+else:
+    memory = ""
+    print("The memory.md file is missing")
+
+system_message = {"role": "system", "content": memory}
+
+# Conversation memory: the whole chat, sent every time
+if os.path.exists("history.json"):
+    with open("history.json", "r", encoding="utf-8") as f:
+        history = json.load(f)
+else:
+    history = []
+
+
+# Only respond to messages from me
+def is_me(message):
+    return message.from_user.id == my_id
+
+
+# Message handlers
+@bot.message_handler(commands=["start", "help"], func=is_me)
 def send_welcome(message):
-    bot.reply_to(message, "Howdy, how are you doing?")
+    bot.reply_to(message, "Hi! I'm your AI secretary. Send me a message.")
 
-@bot.message_handler(func=lambda message: message.from_user.id == my_id)
-def echo_all(message):
-    bot.reply_to(message, message.text)
 
-# This keep the bot active
+@bot.message_handler(func=is_me)
+def handle_message(message):
+    history.append({"role": "user", "content": message.text})
+    try:
+        # Send message to DeepSeek
+        response = client.chat.completions.create(
+            model="deepseek-flash",
+            messages=[system_message] + history,
+        )
+        # Pull the reply text out of DeepSeek's response
+        reply = response.choices[0].message.content
+        bot.reply_to(message, reply)
+        print("Model:", response.model)  # Shows only in the terminal
+    except (APIConnectionError, APITimeoutError):
+        history.pop()
+        bot.reply_to(message, "Couldn't reach DeepSeek. Try again in a moment.")
+        return
+    history.append({"role": "assistant", "content": reply})
+    # Indent + ensure_ascii keep the file human-readable, including Chinese
+    with open("history.json", "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2, ensure_ascii=False)
+
+
+# Keep checking Telegram for new messages
 bot.infinity_polling()
