@@ -42,9 +42,22 @@ else:
     history = []
 
 
-# Only respond to messages from me
 def is_me(message):
+    """Return True only for messages sent by me."""
     return message.from_user.id == my_id
+
+
+def send_reply(chat_id, reply):
+    """Send a reply to Telegram, split if it exceeds the message limit."""
+    for part in util.smart_split(reply, chars_per_string=4000):
+        bot.send_message(chat_id, part)
+
+
+# Indent + ensure_ascii keep the file human-readable, including Chinese
+def save_history():
+    """Save the conversation to history.json so it survives restarts."""
+    with open("history.json", "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2, ensure_ascii=False)
 
 
 # Message handlers
@@ -66,14 +79,14 @@ def handle_message(message):
         # Pull the reply text out of DeepSeek's response
         reply = response.choices[0].message.content
 
-        # Telegram caps messages at 4096 characters
-        for part in util.smart_split(reply, chars_per_string=4000):
-            bot.send_message(message.chat.id, part)
+        send_reply(message.chat.id, reply)
         print("Model:", response.model)  # Shows only in the terminal
+
     except (APIConnectionError, APITimeoutError):
         history.pop()
         bot.reply_to(message, "Couldn't reach DeepSeek. Try again in a moment.")
         return
+
     except APIError as e:
         history.pop()
         bot.reply_to(message, "DeepSeek returned an error. Check the terminal.")
@@ -81,9 +94,7 @@ def handle_message(message):
         return
     history.append({"role": "assistant", "content": reply})
 
-    # Indent + ensure_ascii keep the file human-readable, including Chinese
-    with open("history.json", "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2, ensure_ascii=False)
+    save_history()
 
 
 # Keep checking Telegram for new messages
