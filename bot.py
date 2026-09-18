@@ -53,10 +53,10 @@ def send_reply(chat_id, reply):
         bot.send_message(chat_id, part)
 
 
-# Indent + ensure_ascii keep the file human-readable, including Chinese
 def save_history():
     """Save the conversation to history.json so it survives restarts."""
     with open("history.json", "w", encoding="utf-8") as f:
+        # Indent + ensure_ascii keep the file human-readable, including Chinese
         json.dump(history, f, indent=2, ensure_ascii=False)
 
 
@@ -79,21 +79,23 @@ def handle_message(message):
         # Pull the reply text out of DeepSeek's response
         reply = response.choices[0].message.content
 
+        if not reply:
+            history.pop()
+            bot.reply_to(message, "DeepSeek returned an empty reply.")
+            return
+
         send_reply(message.chat.id, reply)
         print("Model:", response.model)  # Shows only in the terminal
-
     except (APIConnectionError, APITimeoutError):
         history.pop()
         bot.reply_to(message, "Couldn't reach DeepSeek. Try again in a moment.")
         return
-
     except APIError as e:
         history.pop()
         bot.reply_to(message, "DeepSeek returned an error. Check the terminal.")
         print("DeepSeek error:", e)
         return
     history.append({"role": "assistant", "content": reply})
-
     save_history()
 
 
