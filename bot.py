@@ -1,8 +1,9 @@
+"""Telegram bot that talks to DeepSeek, with memory from memory.md."""
 import json
 import os
 from dotenv import load_dotenv
-from telebot import TeleBot
-from openai import OpenAI, APITimeoutError, APIConnectionError
+from telebot import TeleBot, util
+from openai import OpenAI, APIError, APIConnectionError, APITimeoutError
 
 # Load API key, bot token, and Telegram ID from .env
 load_dotenv()
@@ -60,15 +61,25 @@ def handle_message(message):
             model="deepseek-flash",
             messages=[system_message] + history,
         )
+
         # Pull the reply text out of DeepSeek's response
         reply = response.choices[0].message.content
-        bot.reply_to(message, reply)
+
+        # Telegram caps messages at 4096 characters
+        for part in util.smart_split(reply, chars_per_string=4000):
+            bot.send_message(message.chat.id, part)
         print("Model:", response.model)  # Shows only in the terminal
     except (APIConnectionError, APITimeoutError):
         history.pop()
         bot.reply_to(message, "Couldn't reach DeepSeek. Try again in a moment.")
         return
+    except APIError as e:
+        history.pop()
+        bot.reply_to(message, "DeepSeek returned an error. Check the terminal.")
+        print("DeepSeek error:", e)
+        return
     history.append({"role": "assistant", "content": reply})
+
     # Indent + ensure_ascii keep the file human-readable, including Chinese
     with open("history.json", "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2, ensure_ascii=False)

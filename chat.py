@@ -1,9 +1,10 @@
+"""Terminal chat connected directly to DeepSeek API."""
 import json
 import os
 from dotenv import load_dotenv
 from openai import OpenAI, APITimeoutError, APIConnectionError
 
-# load the API key from .env
+# Load the API key from .env
 load_dotenv()
 api_key = os.getenv("DEEPSEEK_API_KEY")
 print("Key loaded:", api_key is not None)
@@ -13,7 +14,7 @@ client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=30
 
 # Facts about me, sent as the system message
 if os.path.exists("memory.md"):
-    with open("memory.md", "r") as f:
+    with open("memory.md", "r", encoding="utf-8") as f:
         memory = f.read()
 else:
     memory = ""
@@ -21,15 +22,15 @@ else:
 
 system_message = {"role": "system", "content": memory}
 
-# Conversation memory: the whole chat, sent every time.
+# Conversation memory: the whole chat, sent every time
 if os.path.exists("history.json"):
-    with open("history.json", "r") as f:
+    with open("history.json", "r", encoding="utf-8") as f:
         history = json.load(f)
 else:
     history = []
 
 print("Type 'quit' to exit.")
-while True: 
+while True:
     # Type a message
     message = input("You: ")
     if message == "quit":
@@ -58,5 +59,7 @@ while True:
         continue
 
     history.append({"role": "assistant", "content": reply})
-    with open("history.json", "w") as f:
-        json.dump(history, f, indent=2, ensure_ascii=False) # indent + ensure_ascii keep the file human-readable, including Chinese
+
+    # Indent + ensure_ascii keep the file human-readable, including Chinese
+    with open("history.json", "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2, ensure_ascii=False)
