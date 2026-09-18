@@ -1,4 +1,5 @@
 """Terminal chat connected directly to DeepSeek API."""
+
 import json
 import os
 from dotenv import load_dotenv
