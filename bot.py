@@ -60,6 +60,20 @@ def save_history():
         json.dump(history, f, indent=2, ensure_ascii=False)
 
 
+def ask_deepseek():
+    """Return DeepSeek's reply to the conversation so far."""
+    # Send the whole conversation to DeepSeek
+    response = client.chat.completions.create(
+        model="deepseek-flash",
+        messages=[system_message] + history,
+    )
+
+    # Pull the reply text out of DeepSeek's response
+    reply = response.choices[0].message.content
+    print("Model:", response.model)  # Shows only in the terminal
+    return reply
+
+
 # Message handlers
 @bot.message_handler(commands=["start", "help"], func=is_me)
 def send_welcome(message):
@@ -70,22 +84,12 @@ def send_welcome(message):
 def handle_message(message):
     history.append({"role": "user", "content": message.text})
     try:
-        # Send message to DeepSeek
-        response = client.chat.completions.create(
-            model="deepseek-flash",
-            messages=[system_message] + history,
-        )
-
-        # Pull the reply text out of DeepSeek's response
-        reply = response.choices[0].message.content
-
+        reply = ask_deepseek()
         if not reply:
             history.pop()
             bot.reply_to(message, "DeepSeek returned an empty reply.")
             return
-
         send_reply(message.chat.id, reply)
-        print("Model:", response.model)  # Shows only in the terminal
     except (APIConnectionError, APITimeoutError):
         history.pop()
         bot.reply_to(message, "Couldn't reach DeepSeek. Try again in a moment.")
