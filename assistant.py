@@ -6,6 +6,8 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from calendar_tool import get_today_events
+
 # Load API key from .env
 load_dotenv()
 
@@ -25,6 +27,21 @@ else:
 
 system_message = {"role": "system", "content": memory}
 
+# Tools DeepSeek can ask us to run
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_today_events",
+            "description": (
+                "Read the user's Google Calendar online within the next 24 hours. "
+                "Use it when the user asks about events or their schedule."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    }
+]
+
 # Conversation memory: the whole chat, sent every time
 if os.path.exists("history.json"):
     with open("history.json", "r", encoding="utf-8") as f:
@@ -35,14 +52,34 @@ else:
 
 def ask_deepseek():
     """Return DeepSeek's reply to the conversation so far."""
+    messages = [system_message] + history
     # Send the whole conversation to DeepSeek
     response = client.chat.completions.create(
         model="deepseek-flash",
-        messages=[system_message] + history,
+        messages=messages,
+        tools=TOOLS,
     )
+    message = response.choices[0].message
+
+    # Run any tools DeepSeek asked for, then ask again with the results
+    if message.tool_calls:
+        messages.append(message)
+        for tool_call in message.tool_calls:
+            if tool_call.function.name == "get_today_events":
+                result = get_today_events()
+                print("Tool used:", tool_call.function.name)
+                messages.append(
+                    {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+                )
+        response = client.chat.completions.create(
+            model="deepseek-flash",
+            messages=messages,
+            tools=TOOLS,
+        )
+        message = response.choices[0].message
 
     # Pull the reply text out of DeepSeek's response
-    reply = response.choices[0].message.content
+    reply = message.content
     print("Model:", response.model)  # Shows only in the terminal
     return reply
 
