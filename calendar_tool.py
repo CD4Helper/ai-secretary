@@ -31,7 +31,7 @@ def get_calendar():
 
 
 def get_today_events():
-    """Return today's calendar events as text, one per line."""
+    """Return the next 24 hours of Google calendar's events as text, one per line."""
     service = get_calendar()
     now = datetime.now(timezone.utc)
     end = now + timedelta(days=1)
